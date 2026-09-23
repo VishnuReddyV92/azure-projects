@@ -27,6 +27,7 @@ resource "azurerm_linux_web_app" "app" {
   app_settings = {
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE"   = "false"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.appinsights.connection_string
+    "WEBSITES_PORT"                         = "8000"
   }
 
   lifecycle {
@@ -50,6 +51,9 @@ resource "azurerm_linux_web_app_slot" "staging" {
     }
     health_check_path = "/health"
     health_check_eviction_time_in_min = 2
+  }
+   app_settings = {
+    "WEBSITES_PORT"                         = "8000"
   }
 
   lifecycle {
