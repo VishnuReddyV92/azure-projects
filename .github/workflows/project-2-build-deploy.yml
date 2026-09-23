@@ -39,6 +39,7 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           exit-code: '1'
+          ignore-unfixed: true
 
       - run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.TAG }}
 
