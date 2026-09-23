@@ -1,0 +1,72 @@
+name: Project 2 - Build, Scan, Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'projects/project-2-acr-appservice/app/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_NAME: myapp
+  WORKDIR: projects/project-2-acr-appservice/app
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - id: vars
+        run: echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - run: docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.TAG }} ${{ env.WORKDIR }}
+
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.TAG }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - run: docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.TAG }}
+
+      - name: Deploy to staging slot
+        run: |
+          az webapp config container set \
+            --name ${{ secrets.APP_SERVICE_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --container-image-name ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.TAG }} \
+            --container-registry-url https://${{ secrets.ACR_LOGIN_SERVER }}
+
+      - run: az webapp restart --name ${{ secrets.APP_SERVICE_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --slot staging
+
+      - name: Smoke test staging
+        run: |
+          URL="https://${{ secrets.APP_SERVICE_NAME }}-staging.azurewebsites.net/health"
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo 000)
+            [ "$STATUS" == "200" ] && exit 0
+            sleep 10
+          done
+          exit 1
+
+      - name: Swap to production
+        run: az webapp deployment slot swap --name ${{ secrets.APP_SERVICE_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --slot staging --target-slot production
+
+      - name: Final check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ secrets.APP_SERVICE_NAME }}.azurewebsites.net/health")
+          [ "$STATUS" == "200" ] || exit 1
