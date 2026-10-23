@@ -27,7 +27,7 @@ variable "user_pool_max_count" {
 }
 
 variable "key_vault_name" {
-  default = "kv-project34-<UNIQUE_SUFFIX>" # replace with a globally unique suffix, 3-24 chars total
+  default = "kv-project34-vvr7421" # replace with a globally unique suffix, 3-24 chars total
 }
 
 variable "k8s_namespace" {
