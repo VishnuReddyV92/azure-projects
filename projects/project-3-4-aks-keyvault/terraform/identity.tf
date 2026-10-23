@@ -9,8 +9,6 @@ resource "azurerm_user_assigned_identity" "app4" {
 resource "azurerm_federated_identity_credential" "app4" {
   name                = "app4-fic"
   user_assigned_identity_id = azurerm_user_assigned_identity.app4.id
-  #resource_group_name = azurerm_resource_group.main.name
-  #parent_id           = azurerm_user_assigned_identity.app4.id
   issuer              = azurerm_kubernetes_cluster.main.oidc_issuer_url
   subject             = "system:serviceaccount:${var.k8s_namespace}:${var.k8s_service_account_name}"
   audience            = ["api://AzureADTokenExchange"]
@@ -21,4 +19,10 @@ resource "azurerm_role_assignment" "app4_kv" {
   scope                = azurerm_key_vault.main.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.app4.principal_id
+}
+# You get kubectl cluster-admin through Azure RBAC (local accounts are disabled)
+resource "azurerm_role_assignment" "aks_admin" {
+  scope                = azurerm_kubernetes_cluster.main.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = var.aks_admin_object_id
 }
